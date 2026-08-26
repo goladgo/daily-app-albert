@@ -15,3 +15,5 @@ Personal daily management app — Next.js on Vercel, Vercel Postgres, Google + O
 ## Deploys
 
 Connected to this GitHub repo — pushes to `main` deploy automatically via Vercel.
+
+_Connected to Vercel for automatic deployments as of 2026-08-26 — verifying auto-deploy._
