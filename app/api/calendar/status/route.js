@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { sql, ensureInit } from '@/lib/db';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   await ensureInit();
   const { rows } = await sql`SELECT provider, account_email FROM oauth_accounts`;
