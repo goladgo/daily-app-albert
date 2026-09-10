@@ -14,10 +14,19 @@ export async function GET(req) {
     return NextResponse.json({ error: 'from and to are required' }, { status: 400 });
   }
 
+  // Each provider fetch is caught individually so a failure in one
+  // integration (e.g. a revoked OAuth refresh token) can't reject the
+  // whole Promise.all and blank out the other provider's events too.
   const [googleEvents, outlookEvents, localRows, syncedOutlookRows] = await Promise.all([
-    fetchGoogleWeekEvents(from, to),
-    fetchOutlookWeekEvents(from, to),
-    sql`
+    fetchGoogleWeekEvents(from, to).catch((err) => {
+      console.error('fetchGoogleWeekEvents failed:', err);
+      return { error: true, status: 0 };
+    }),
+    fetchOutlookWeekEvents(from, to).catch((err) => {
+      console.error('fetchOutlookWeekEvents failed:', err);
+      return { error: true, status: 0 };
+    }),
+ sql`
       SELECT * FROM schedule_items
       WHERE completed = false
       AND (start_time IS NULL OR (start_time >= ${from}::timestamptz AND start_time < ${to}::timestamptz))
