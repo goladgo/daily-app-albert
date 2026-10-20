@@ -36,6 +36,19 @@ export default function WorkPage() {
     loadFlagged();
   }, [loadWeek, loadInbox, loadFlagged]);
 
+  // Refetch inbox/flagged when the tab regains focus so the user always sees
+  // fresh data when switching to this tab (triage automation runs 2x daily).
+  useEffect(() => {
+    function handleVisibility() {
+      if (document.visibilityState === 'visible') {
+        loadInbox();
+        loadFlagged();
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [loadInbox, loadFlagged]);
+
   async function logout() {
     await fetch('/api/logout', { method: 'POST' });
     router.push('/login');
