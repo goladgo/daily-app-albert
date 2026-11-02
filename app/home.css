@@ -32,3 +32,6 @@ div.water-note {
 .badge-news-warning { background: rgba(245,158,11,0.15); color: #f59e0b; }
 .badge-news-other { background: rgba(148,163,184,0.15); color: var(--text-dim); }
 .brief-news .row { align-items: flex-start; }
+
+.water-links { font-size: 12px; color: var(--text-dim); margin: -2px 0 10px; }
+.water-links a { color: var(--accent); text-decoration: none; font-weight: 600; }

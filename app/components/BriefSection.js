@@ -43,6 +43,14 @@ export default function BriefSection({ brief }) {
             <Beach name="Cabrillo Outer" info={data.water?.outer} />
           </div>
           {data.water?.advisory && <div className="water-note">{data.water.advisory}</div>}
+          {(data.water?.inner?.status !== 'good' && data.water?.inner?.status !== 'advisory' && data.water?.inner?.status !== 'closed') ||
+           (data.water?.outer?.status !== 'good' && data.water?.outer?.status !== 'advisory' && data.water?.outer?.status !== 'closed') ? (
+            <div className="water-links">
+              Not verified today ·{' '}
+              <a href="tel:18005255662">Call county beach hotline</a> ·{' '}
+              <a href="https://www.google.com/search?q=Cabrillo+Beach+water+quality+today" target="_blank" rel="noopener noreferrer">Check online</a>
+            </div>
+          ) : null}
 
           <div className="card brief-news">
             {(!data.news || data.news.length === 0) && <div className="empty-hint">No notable local news today.</div>}

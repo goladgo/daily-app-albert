@@ -3,6 +3,7 @@ import { sql, ensureInit, rolloverOverdueItems } from '@/lib/db';
 import { ensureHomeTables } from '@/lib/home';
 import { fetchGoogleWeekEvents } from '@/lib/google';
 import { fetchOutlookWeekEvents } from '@/lib/outlook';
+import { fetchOutlookIcsEvents } from '@/lib/outlookIcs';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
@@ -22,7 +23,7 @@ export async function GET(req) {
   // Each provider fetch is caught individually so a failure in one
   // integration (e.g. a revoked OAuth refresh token) can't reject the
   // whole Promise.all and blank out the other provider's events too.
-  const [googleEvents, outlookEvents, localRows, syncedOutlookRows, hiddenRows] = await Promise.all([
+  const [googleEvents, outlookEvents, icsEvents, localRows, syncedOutlookRows, hiddenRows] = await Promise.all([
     fetchGoogleWeekEvents(from, to).catch((err) => {
       console.error('fetchGoogleWeekEvents failed:', err);
       return { error: true, status: 0 };
@@ -30,6 +31,10 @@ export async function GET(req) {
     fetchOutlookWeekEvents(from, to).catch((err) => {
       console.error('fetchOutlookWeekEvents failed:', err);
       return { error: true, status: 0 };
+    }),
+    fetchOutlookIcsEvents(from, to).catch((err) => {
+      console.error('fetchOutlookIcsEvents failed:', err);
+      return null;
     }),
     sql`
       SELECT * FROM schedule_items
@@ -70,11 +75,14 @@ export async function GET(req) {
   // The live Graph call and the synced table can both return the same
   // meeting. Prefer the synced copy (stable id) and drop duplicates by
   // title + start time, then drop anything the user hid.
+  // When the published Outlook calendar (ICS) is available it is the
+  // source of truth, so synced rows / the live Graph call are ignored.
+  const icsOk = Array.isArray(icsEvents);
   const seenOutlook = new Set();
-  const outlookAll = [
+  const outlookAll = (icsOk ? icsEvents : [
     ...syncedOutlookItems,
     ...(Array.isArray(outlookEvents) ? outlookEvents : []),
-  ].filter((ev) => {
+  ]).filter((ev) => {
     const key = `${String(ev.title || '').trim().toLowerCase()}|${ev.start ? new Date(ev.start).getTime() : ''}`;
     if (seenOutlook.has(key)) return false;
     seenOutlook.add(key);
@@ -103,6 +111,6 @@ export async function GET(req) {
     googleError: googleEvents && googleEvents.error ? googleEvents.status : null,
     outlookError: outlookEvents && outlookEvents.error ? outlookEvents.status : null,
     googleConnected: googleEvents !== null,
-    outlookConnected: outlookEvents !== null,
+    outlookConnected: icsOk || outlookEvents !== null,
   });
 }

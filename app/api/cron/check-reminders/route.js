@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import webpush from 'web-push';
 import { sql, ensureInit } from '@/lib/db';
 import { fetchGoogleWeekEvents } from '@/lib/google';
-import { fetchOutlookWeekEvents } from '@/lib/outlook';
+import { fetchOutlookEventsForReminders as fetchOutlookWeekEvents } from '@/lib/outlookIcs';
 
 export const dynamic = 'force-dynamic';
 
