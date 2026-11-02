@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 const PUBLIC_EXACT = ['/login', '/api/auth', '/manifest.json', '/icon-192.png', '/icon-512.png', '/favicon.ico', '/sw.js'];
-const PUBLIC_PREFIXES = ['/api/cron', '/api/inbox/ingest', '/api/calendar/outlook-sync', '/api/tasks/ingest', '/api/flagged/ingest', '/api/work/scan/ingest', '/api/events/ingest', '/api/events/weekly-graphic', '/api/events/feed', '/api/brief/ingest', '/api/capture'];
+const PUBLIC_PREFIXES = ['/api/cron', '/api/inbox/ingest', '/api/calendar/outlook-sync', '/api/tasks/ingest', '/api/flagged/ingest', '/api/work/scan/ingest', '/api/events/ingest', '/api/events/weekly-graphic', '/api/events/feed', '/api/brief/ingest', '/api/capture', '/api/work-tasks/ingest'];
 
 function isPublic(pathname) {
   return PUBLIC_EXACT.includes(pathname) || PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));
