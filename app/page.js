@@ -3,36 +3,30 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { weekBounds, buildDayBuckets, bucketize, urlBase64ToUint8Array } from '@/lib/weekUtils';
-import HybridWeek from './components/HybridWeek';
+import CombinedWeek from './components/CombinedWeek';
+import BriefSection from './components/BriefSection';
+import AddItemForm from './components/AddItemForm';
+import GoogleEventModal from './components/GoogleEventModal';
 import BottomNav from './components/BottomNav';
 import MicButton from './components/MicButton';
-
-function todayStrLocal() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
+import './home.css';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const date = todayStrLocal();
 
   const [workEvents, setWorkEvents] = useState([]);
   const [personalEvents, setPersonalEvents] = useState([]);
+  const [localEvents, setLocalEvents] = useState([]);
+  const [googleConnected, setGoogleConnected] = useState(false);
   const [calendarBanner, setCalendarBanner] = useState(null);
+  const [brief, setBrief] = useState(null);
 
   const [grocery, setGrocery] = useState([]);
   const [braindump, setBraindump] = useState([]);
   const [capture, setCapture] = useState('');
   const [groceryInput, setGroceryInput] = useState('');
-  const [showAddSchedule, setShowAddSchedule] = useState(false);
-
-  const [newTitle, setNewTitle] = useState('');
-  const [newCategory, setNewCategory] = useState('personal');
-  const [newTime, setNewTime] = useState('');
-  const [newReminder, setNewReminder] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+  const [editingGoogle, setEditingGoogle] = useState(null);
 
   const [notifSupported, setNotifSupported] = useState(false);
   const [notifPermission, setNotifPermission] = useState('default');
@@ -43,6 +37,33 @@ export default function DashboardPage() {
     const data = await fetch(`/api/calendar/week?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`).then((r) => r.json());
     setWorkEvents(Array.isArray(data.work) ? data.work : []);
     setPersonalEvents(Array.isArray(data.personal) ? data.personal : []);
+    setGoogleConnected(!!data.googleConnected);
+  }, []);
+
+  const loadLocalEvents = useCallback(async () => {
+    const { from, to } = weekBounds();
+    const data = await fetch(`/api/events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`).then((r) => r.json());
+    const items = Array.isArray(data) ? data : [];
+    setLocalEvents(
+      items.map((row) => ({
+        id: `event_${row.id}`,
+        localId: row.id,
+        title: row.title,
+        notes: row.venue || null,
+        start: row.start_time,
+        allDay: row.all_day,
+        source: 'event',
+        category: row.category,
+        url: row.url,
+      }))
+    );
+  }, []);
+
+  const loadBrief = useCallback(async () => {
+    try {
+      const b = await fetch('/api/brief').then((r) => r.json());
+      setBrief(b);
+    } catch (e) {}
   }, []);
 
   const loadRest = useCallback(async () => {
@@ -54,10 +75,25 @@ export default function DashboardPage() {
     setBraindump(Array.isArray(b) ? b : []);
   }, []);
 
-  useEffect(() => {
+  const loadAll = useCallback(() => {
+    loadBrief();
     loadWeek();
+    loadLocalEvents();
     loadRest();
-  }, [loadWeek, loadRest]);
+  }, [loadBrief, loadWeek, loadLocalEvents, loadRest]);
+
+  useEffect(() => {
+    loadAll();
+  }, [loadAll]);
+
+  // Refresh when the app regains focus so the morning open is always current.
+  useEffect(() => {
+    function handleVisibility() {
+      if (document.visibilityState === 'visible') loadAll();
+    }
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [loadAll]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -160,31 +196,80 @@ export default function DashboardPage() {
     loadWeek();
   }
 
-  async function addSchedule(e) {
-    e.preventDefault();
-    if (!newTitle.trim()) return;
+  // Remove a Local Event (soft-dismiss).
+  async function dismissEvent(localId) {
+    setLocalEvents((prev) => prev.filter((e) => e.localId !== localId));
+    await fetch(`/api/events/${localId}`, { method: 'DELETE' });
+  }
 
-    let start_time = null;
-    if (newTime) {
-      const [year, month, day] = date.split('-').map(Number);
-      const [hh, mm] = newTime.split(':').map(Number);
-      start_time = new Date(year, month - 1, day, hh, mm, 0).toISOString();
-    }
-
-    await fetch('/api/schedule', {
+  // Outlook is read-only in this app, so "remove" hides it from Home only.
+  async function hideOutlookEvent(ev) {
+    setWorkEvents((prev) => prev.filter((e) => e.id !== ev.id));
+    await fetch('/api/calendar/hide', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: newTitle.trim(),
-        category: newCategory,
-        is_reminder: newReminder,
-        start_time,
-      }),
+      body: JSON.stringify({ id: ev.id }),
     });
-    setNewTitle('');
-    setNewTime('');
-    setNewReminder(false);
-    setShowAddSchedule(false);
+  }
+
+  async function handleAdd({ type, title, date, time, allDay, category, reminder, venue }) {
+    const [y, m, d] = (date || '').split('-').map(Number);
+    const startIso = () => {
+      if (allDay || !time) return new Date(y, m - 1, d, 0, 0, 0).toISOString();
+      const [hh, mm] = time.split(':').map(Number);
+      return new Date(y, m - 1, d, hh, mm, 0).toISOString();
+    };
+
+    if (type === 'task') {
+      let start_time = null;
+      if (time) {
+        const now = new Date();
+        const [hh, mm] = time.split(':').map(Number);
+        start_time = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, 0).toISOString();
+      }
+      await fetch('/api/schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, category, is_reminder: reminder, start_time }),
+      });
+      await loadWeek();
+    } else if (type === 'google') {
+      const start = allDay || !time ? date : startIso();
+      await fetch('/api/calendar/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, start, allDay: allDay || !time }),
+      });
+      await loadWeek();
+    } else {
+      await fetch('/api/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, start: startIso(), allDay: allDay || !time, venue: venue || null }),
+      });
+      await loadLocalEvents();
+    }
+    setShowAdd(false);
+  }
+
+  function openEditGoogle(ev) {
+    const rawId = ev.id.startsWith('google_') ? ev.id.slice('google_'.length) : ev.id;
+    setEditingGoogle({ ...ev, rawId });
+  }
+
+  async function saveGoogle({ title, start, allDay }) {
+    await fetch(`/api/calendar/google/${editingGoogle.rawId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, start, allDay }),
+    });
+    setEditingGoogle(null);
+    loadWeek();
+  }
+
+  async function deleteGoogle() {
+    await fetch(`/api/calendar/google/${editingGoogle.rawId}`, { method: 'DELETE' });
+    setEditingGoogle(null);
     loadWeek();
   }
 
@@ -229,6 +314,7 @@ export default function DashboardPage() {
   const dayBuckets = buildDayBuckets(monday);
   const workBuckets = bucketize(workEvents, dayBuckets);
   const personalBuckets = bucketize(personalEvents, dayBuckets);
+  const localBuckets = bucketize(localEvents, dayBuckets);
 
   return (
     <div className="page">
@@ -257,6 +343,7 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* 1. Quick Capture (+ Brain Dump) */}
       <form className="quick-capture" onSubmit={addCapture}>
         <input
           type="text"
@@ -287,74 +374,36 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="section">
-        <div className="section-title">Tasks &amp; Schedule</div>
+      {/* 2. Water quality + local news */}
+      <BriefSection brief={brief} />
 
-        {!showAddSchedule && (
-          <button className="add-toggle" onClick={() => setShowAddSchedule(true)}>
-            + Add a task or reminder
+      {/* 3. Combined calendar */}
+      <div className="section">
+        <div className="section-title">Schedule</div>
+
+        {!showAdd && (
+          <button className="add-toggle" onClick={() => setShowAdd(true)}>
+            + Add a task, reminder, or event
           </button>
         )}
-
-        {showAddSchedule && (
-          <form className="add-form" onSubmit={addSchedule}>
-            <div className="row-inline">
-              <input
-                type="text"
-                placeholder="What is it?"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                autoFocus
-              />
-              <MicButton onResult={(text) => setNewTitle((prev) => (prev ? `${prev} ${text}` : text))} />
-            </div>
-            <div className="row-inline">
-              <input
-                type="time"
-                value={newTime}
-                onChange={(e) => setNewTime(e.target.value)}
-              />
-            </div>
-            <div className="pill-group">
-              <div
-                className={`pill ${newCategory === 'work' ? 'active work' : ''}`}
-                onClick={() => setNewCategory('work')}
-              >
-                Work
-              </div>
-              <div
-                className={`pill ${newCategory === 'personal' ? 'active personal' : ''}`}
-                onClick={() => setNewCategory('personal')}
-              >
-                Personal
-              </div>
-            </div>
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={newReminder}
-                onChange={(e) => setNewReminder(e.target.checked)}
-              />
-              This is a reminder
-            </label>
-            <div className="form-actions">
-              <button type="button" className="btn-cancel" onClick={() => setShowAddSchedule(false)}>
-                Cancel
-              </button>
-              <button type="submit" className="btn-save">Save</button>
-            </div>
-          </form>
+        {showAdd && (
+          <AddItemForm googleConnected={googleConnected} onAdd={handleAdd} onCancel={() => setShowAdd(false)} />
         )}
 
-        <HybridWeek
+        <CombinedWeek
           dayBuckets={dayBuckets}
           workBuckets={workBuckets}
           personalBuckets={personalBuckets}
+          localBuckets={localBuckets}
           onToggleLocal={toggleLocal}
           onDeleteLocal={deleteLocal}
+          onEditGoogle={openEditGoogle}
+          onDismissEvent={dismissEvent}
+          onHideEvent={hideOutlookEvent}
         />
       </div>
 
+      {/* 4. Groceries */}
       <div className="section">
         <div className="section-title">Groceries</div>
         <form className="quick-capture" onSubmit={addGrocery}>
@@ -390,6 +439,15 @@ export default function DashboardPage() {
           <button className="clear-btn" onClick={clearChecked}>Clear checked items</button>
         )}
       </div>
+
+      {editingGoogle && (
+        <GoogleEventModal
+          event={editingGoogle}
+          onClose={() => setEditingGoogle(null)}
+          onSave={saveGoogle}
+          onDelete={deleteGoogle}
+        />
+      )}
 
       <BottomNav />
     </div>

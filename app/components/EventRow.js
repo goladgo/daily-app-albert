@@ -9,10 +9,11 @@ const CATEGORY_LABELS = {
   general: 'Local',
 };
 
-export default function EventRow({ ev, catClass, onToggleLocal, onDeleteLocal, onEditGoogle, onDismissEvent }) {
+export default function EventRow({ ev, catClass, onToggleLocal, onDeleteLocal, onEditGoogle, onDismissEvent, onHideEvent }) {
   const time = ev.allDay ? 'All day' : formatTime(ev.start) || 'Anytime';
   const isLocal = ev.source === 'local';
   const isEvent = ev.source === 'event';
+  const isOutlook = ev.source === 'outlook';
   const isEditableGoogle = ev.source === 'google' && typeof onEditGoogle === 'function';
   const categoryLabel = isEvent && ev.category ? (CATEGORY_LABELS[ev.category] || ev.category) : null;
 
@@ -48,7 +49,12 @@ export default function EventRow({ ev, catClass, onToggleLocal, onDeleteLocal, o
       )}
       {isEvent && typeof onDismissEvent === 'function' && (
         <div className="row-actions">
-          <button className="icon-btn" title="Not interested" onClick={(e) => { e.stopPropagation(); onDismissEvent(ev.localId); }}>×</button>
+          <button className="icon-btn" title="Remove" onClick={(e) => { e.stopPropagation(); onDismissEvent(ev.localId); }}>×</button>
+        </div>
+      )}
+      {isOutlook && typeof onHideEvent === 'function' && (
+        <div className="row-actions">
+          <button className="icon-btn" title="Hide from app (Outlook is read-only)" onClick={(e) => { e.stopPropagation(); onHideEvent(ev); }}>×</button>
         </div>
       )}
     </div>

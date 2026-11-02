@@ -13,7 +13,6 @@ export default function PersonalPage() {
   const [googleConnected, setGoogleConnected] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
-  const [localEvents, setLocalEvents] = useState([]);
 
   const loadWeek = useCallback(async () => {
     const { from, to } = weekBounds();
@@ -22,29 +21,9 @@ export default function PersonalPage() {
     setGoogleConnected(!!data.googleConnected);
   }, []);
 
-  const loadLocalEvents = useCallback(async () => {
-    const { from, to } = weekBounds();
-    const data = await fetch(`/api/events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`).then((r) => r.json());
-    const items = Array.isArray(data) ? data : [];
-    setLocalEvents(
-      items.map((row) => ({
-        id: `event_${row.id}`,
-        localId: row.id,
-        title: row.title,
-        notes: row.venue || null,
-        start: row.start_time,
-        allDay: row.all_day,
-        source: 'event',
-        category: row.category,
-        url: row.url,
-      }))
-    );
-  }, []);
-
   useEffect(() => {
     loadWeek();
-    loadLocalEvents();
-  }, [loadWeek, loadLocalEvents]);
+  }, [loadWeek]);
 
   async function logout() {
     await fetch('/api/logout', { method: 'POST' });
@@ -64,11 +43,6 @@ export default function PersonalPage() {
   async function deleteLocal(localId) {
     await fetch(`/api/schedule/${localId}`, { method: 'DELETE' });
     loadWeek();
-  }
-
-  async function dismissEvent(localId) {
-    setLocalEvents((prev) => prev.filter((e) => e.localId !== localId));
-    await fetch(`/api/events/${localId}`, { method: 'DELETE' });
   }
 
   function openNewEventModal() {
@@ -116,7 +90,6 @@ export default function PersonalPage() {
   const { monday } = weekBounds();
   const dayBuckets = buildDayBuckets(monday);
   const personalBuckets = bucketize(personalEvents, dayBuckets);
-  const localEventBuckets = bucketize(localEvents, dayBuckets);
 
   return (
     <div className="page">
@@ -142,14 +115,6 @@ export default function PersonalPage() {
         onToggleLocal={toggleLocal}
         onDeleteLocal={deleteLocal}
         onEditGoogle={openEditEventModal}
-      />
-
-      <WeekSection
-        title="Local Events"
-        buckets={localEventBuckets}
-        catClass="cat-local"
-        onDismissEvent={dismissEvent}
-        emptyHint="Nothing found yet"
       />
 
       {modalOpen && (
