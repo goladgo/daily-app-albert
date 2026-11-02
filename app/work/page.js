@@ -10,8 +10,7 @@ export default function WorkPage() {
   const router = useRouter();
   const [workEvents, setWorkEvents] = useState([]);
   const [outlookConnected, setOutlookConnected] = useState(null);
-  const [inbox, setInbox] = useState([]);
-  const [flagged, setFlagged] = useState([]);
+  const [tasks, setTasks] = useState([]);
 
   const loadWeek = useCallback(async () => {
     const { from, to } = weekBounds();
@@ -20,34 +19,28 @@ export default function WorkPage() {
     setOutlookConnected(!!data.outlookConnected);
   }, []);
 
-  const loadInbox = useCallback(async () => {
-    const i = await fetch('/api/inbox').then((r) => r.json());
-    setInbox(Array.isArray(i) ? i : []);
-  }, []);
-
-  const loadFlagged = useCallback(async () => {
-    const f = await fetch('/api/flagged').then((r) => r.json());
-    setFlagged(Array.isArray(f) ? f : []);
+  const loadTasks = useCallback(async () => {
+    const t = await fetch('/api/work-tasks').then((r) => r.json()).catch(() => []);
+    setTasks(Array.isArray(t) ? t : []);
   }, []);
 
   useEffect(() => {
     loadWeek();
-    loadInbox();
-    loadFlagged();
-  }, [loadWeek, loadInbox, loadFlagged]);
+    loadTasks();
+  }, [loadWeek, loadTasks]);
 
-  // Refetch inbox/flagged when the tab regains focus so the user always sees
-  // fresh data when switching to this tab (triage automation runs 2x daily).
+  // Scanner runs 8am and noon M-F; refetch on focus and hourly.
   useEffect(() => {
     function handleVisibility() {
-      if (document.visibilityState === 'visible') {
-        loadInbox();
-        loadFlagged();
-      }
+      if (document.visibilityState === 'visible') loadTasks();
     }
     document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [loadInbox, loadFlagged]);
+    const timer = setInterval(loadTasks, 60 * 60 * 1000);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      clearInterval(timer);
+    };
+  }, [loadTasks]);
 
   async function logout() {
     await fetch('/api/logout', { method: 'POST' });
@@ -69,25 +62,18 @@ export default function WorkPage() {
     loadWeek();
   }
 
-  async function dismissInboxItem(id) {
-    setInbox((prev) => prev.filter((i) => i.id !== id));
-    await fetch(`/api/inbox/${id}`, { method: 'DELETE' });
-  }
-
-  async function convertInboxItem(item) {
-    setInbox((prev) => prev.filter((i) => i.id !== item.id));
-    await fetch('/api/schedule', {
-      method: 'POST',
+  async function completeTask(id) {
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+    await fetch(`/api/work-tasks/${id}`, {
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: item.subject || item.summary, category: 'work' }),
+      body: JSON.stringify({ done: true }),
     });
-    await fetch(`/api/inbox/${item.id}`, { method: 'DELETE' });
-    loadWeek();
   }
 
-  async function dismissFlagged(id) {
-    setFlagged((prev) => prev.filter((i) => i.id !== id));
-    await fetch(`/api/flagged/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  async function dismissTask(id) {
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+    await fetch(`/api/work-tasks/${id}`, { method: 'DELETE' });
   }
 
   const { monday } = weekBounds();
@@ -104,48 +90,32 @@ export default function WorkPage() {
         <button className="logout-btn" onClick={logout}>Log out</button>
       </div>
 
-      {flagged.length > 0 && (
-        <div className="section">
-          <div className="section-title">Flagged</div>
-          <div className={`card ${flagged.length > 5 ? 'scroll-card' : ''}`}>
-            {flagged.map((item) => (
-              <div className="row" key={item.id}>
-                <span className="flag-icon">⚑</span>
-                <div className="row-body">
-                  <div className="row-title">{item.subject || '(no subject)'}</div>
-                  <div className="row-meta">{item.sender ? `From ${item.sender}` : ''}</div>
-                  <div className="row-meta">{item.summary}</div>
+      <div className="section">
+        <div className="section-title">Work Tasks</div>
+        <div className={`card ${tasks.length > 5 ? 'scroll-card' : ''}`}>
+          {tasks.length === 0 && <div className="empty-hint">No open work tasks.</div>}
+          {tasks.map((t) => (
+            <div className="row" key={t.id}>
+              <button className="row-check" title="Done" onClick={() => completeTask(t.id)}></button>
+              <div className="row-body">
+                <div className="row-title">
+                  <span className="badge badge-sports">{t.label}</span>
+                  {t.link ? (
+                    <a href={t.link} target="_blank" rel="noopener noreferrer">{t.title}</a>
+                  ) : t.title}
                 </div>
-                <div className="row-actions">
-                  <button className="icon-btn" title="Dismiss" onClick={() => dismissFlagged(item.id)}>×</button>
+                <div className="row-meta">
+                  {[t.sender, t.project, t.due ? `Due ${t.due}` : null].filter(Boolean).join(' · ')}
                 </div>
+                {t.summary && <div className="row-meta">{t.summary}</div>}
               </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {inbox.length > 0 && (
-        <div className="section">
-          <div className="section-title">Inbox</div>
-          <div className={`card ${inbox.length > 5 ? 'scroll-card' : ''}`}>
-            {inbox.map((item) => (
-              <div className="row" key={item.id}>
-                <span className="flag-icon">✉</span>
-                <div className="row-body">
-                  <div className="row-title">{item.subject || '(no subject)'}</div>
-                  <div className="row-meta">{item.sender ? `From ${item.sender}` : ''}</div>
-                  <div className="row-meta">{item.summary}</div>
-                </div>
-                <div className="row-actions">
-                  <button className="icon-btn" title="Move to schedule" onClick={() => convertInboxItem(item)}>→</button>
-                  <button className="icon-btn" title="Dismiss" onClick={() => dismissInboxItem(item.id)}>×</button>
-                </div>
+              <div className="row-actions">
+                <button className="icon-btn" title="Not needed" onClick={() => dismissTask(t.id)}>×</button>
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
-      )}
+      </div>
 
       <WeekSection
         title="Work Week"
