@@ -5,12 +5,14 @@
   --border: #2e3a56;
   --text: #f1f5f9;
   --text-dim: #94a3b8;
-  --work: #3b82f6;
-  --personal: #10b981;
+  --work: #2e9e44;        /* DuraTrench green: change this one hex to retune */
+  --personal: #3b82f6;
+  --birthday: #facc15;
+  --holiday: #ef4444;
   --reminder: #f59e0b;
   --danger: #ef4444;
   --accent: #4f46e5;
-  --local: #ec4899;
+  --local: #f8fafc;
 }
 
 * { box-sizing: border-box; }
@@ -201,6 +203,8 @@ button {
 .row.cat-personal { border-left-color: var(--personal); }
 .row.cat-reminder { border-left-color: var(--reminder); }
 .row.cat-local { border-left-color: var(--local); }
+.row.cat-birthday { border-left-color: var(--birthday); }
+.row.cat-holiday { border-left-color: var(--holiday); }
 
 .row-check {
   width: 22px;
@@ -342,8 +346,8 @@ button {
   text-align: center;
 }
 
-.pill.active.work { background: rgba(59,130,246,0.2); border-color: var(--work); color: var(--work); }
-.pill.active.personal { background: rgba(16,185,129,0.2); border-color: var(--personal); color: var(--personal); }
+.pill.active.work { background: rgba(46,158,68,0.2); border-color: var(--work); color: var(--work); }
+.pill.active.personal { background: rgba(59,130,246,0.2); border-color: var(--personal); color: var(--personal); }
 
 .checkbox-row {
   display: flex;
