@@ -15,11 +15,12 @@ export default function EventRow({ ev, catClass, onToggleLocal, onDeleteLocal, o
   const isEvent = ev.source === 'event';
   const isOutlook = ev.source === 'outlook';
   const isEditableGoogle = ev.source === 'google' && typeof onEditGoogle === 'function';
+  const tone = ev.source === 'google_birthday' ? 'cat-birthday' : ev.source === 'google_holiday' ? 'cat-holiday' : catClass;
   const categoryLabel = isEvent && ev.category ? (CATEGORY_LABELS[ev.category] || ev.category) : null;
 
   return (
     <div
-      className={`row event-row ${catClass} ${isEditableGoogle ? 'editable' : ''}`}
+      className={`row event-row ${tone} ${isEditableGoogle ? 'editable' : ''}`}
       onClick={isEditableGoogle ? () => onEditGoogle(ev) : undefined}
     >
       {isLocal ? (

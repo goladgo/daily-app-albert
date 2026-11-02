@@ -39,7 +39,7 @@ export default function AddItemForm({ googleConnected, onAdd, onCancel }) {
       <div className="pill-group">
         <div className={`pill ${type === 'task' ? 'active personal' : ''}`} onClick={() => setType('task')}>Task</div>
         {googleConnected && (
-          <div className={`pill ${type === 'google' ? 'active work' : ''}`} onClick={() => setType('google')}>Google event</div>
+          <div className={`pill ${type === 'google' ? 'active personal' : ''}`} onClick={() => setType('google')}>Google event</div>
         )}
         <div className={`pill ${type === 'local' ? 'active personal' : ''}`} onClick={() => setType('local')}>Local event</div>
       </div>
