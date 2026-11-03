@@ -3,15 +3,24 @@
 const STATUS_LABEL = { good: 'Good', advisory: 'Advisory', closed: 'Warning / closed', unknown: 'No data' };
 const CAT_LABEL = { crime: 'Crime', business: 'New business', events: 'Events', warning: 'Warning', other: 'News' };
 
+const COUNTY_MAP_URL = 'http://publichealth.lacounty.gov/phcommon/public/eh/water_quality/beach_grades.cfm';
+
 function Beach({ name, info }) {
   const s = info?.status || 'unknown';
   return (
-    <div className={`water-tile water-${s}`}>
+    <a
+      className={`water-tile water-${s}`}
+      href={COUNTY_MAP_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      title="Open the county beach grade map"
+    >
       <div className="water-name">{name}</div>
       <div className="water-status">{STATUS_LABEL[s]}</div>
       {info?.detail && <div className="water-detail">{info.detail}</div>}
       {info?.testedOn && <div className="water-detail">Tested {info.testedOn}</div>}
-    </div>
+      <div className="water-detail water-map">County grade map ↗</div>
+    </a>
   );
 }
 
