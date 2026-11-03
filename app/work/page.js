@@ -6,11 +6,31 @@ import { weekBounds, buildDayBuckets, bucketize } from '@/lib/weekUtils';
 import WeekSection from '../components/WeekSection';
 import BottomNav from '../components/BottomNav';
 
+// Age of a task: short text plus a color that warms as it goes stale
+// (<24h normal, 24-48h amber, >48h red).
+function taskAge(iso) {
+  if (!iso) return null;
+  const hours = (Date.now() - new Date(iso).getTime()) / 36e5;
+  if (Number.isNaN(hours)) return null;
+  const text = hours < 1 ? 'just now' : hours < 24 ? `${Math.floor(hours)}h ago` : `${Math.floor(hours / 24)}d ago`;
+  const level = hours >= 48 ? 'red' : hours >= 24 ? 'amber' : 'normal';
+  return { text, level };
+}
+
+const AGE_BADGE = {
+  normal: null,
+  amber: { background: 'rgba(245, 158, 11, 0.15)', color: 'var(--reminder)' },
+  red: { background: 'rgba(239, 68, 68, 0.15)', color: 'var(--danger)' },
+};
+
+const CLAMP = { display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' };
+
 export default function WorkPage() {
   const router = useRouter();
   const [workEvents, setWorkEvents] = useState([]);
   const [outlookConnected, setOutlookConnected] = useState(null);
   const [tasks, setTasks] = useState([]);
+  const [expanded, setExpanded] = useState({});
 
   const loadWeek = useCallback(async () => {
     const { from, to } = weekBounds();
@@ -94,26 +114,36 @@ export default function WorkPage() {
         <div className="section-title">Work Tasks</div>
         <div className={`card ${tasks.length > 5 ? 'scroll-card' : ''}`}>
           {tasks.length === 0 && <div className="empty-hint">No open work tasks.</div>}
-          {tasks.map((t) => (
-            <div className="row" key={t.id}>
-              <button className="row-check" title="Done" onClick={() => completeTask(t.id)}></button>
-              <div className="row-body">
-                <div className="row-title">
-                  <span className="badge badge-sports">{t.label}</span>
-                  {t.link ? (
-                    <a href={t.link} target="_blank" rel="noopener noreferrer">{t.title}</a>
-                  ) : t.title}
+          {tasks.map((t) => {
+            const age = taskAge(t.received_at);
+            const isOpen = !!expanded[t.id];
+            return (
+              <div className="row" key={t.id}>
+                <button className="row-check" title="Done" onClick={() => completeTask(t.id)}></button>
+                <div
+                  className="row-body"
+                  style={{ cursor: t.summary ? 'pointer' : undefined }}
+                  onClick={() => setExpanded((prev) => ({ ...prev, [t.id]: !prev[t.id] }))}
+                >
+                  <div className="row-title">
+                    <span className="badge badge-sports" style={age ? AGE_BADGE[age.level] || undefined : undefined}>{t.label}</span>
+                    {t.link ? (
+                      <a href={t.link} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>{t.title}</a>
+                    ) : t.title}
+                  </div>
+                  <div className="row-meta">
+                    {[age ? age.text : null, t.sender, t.project, t.due ? `Due ${t.due}` : null].filter(Boolean).join(' · ')}
+                  </div>
+                  {t.summary && (
+                    <div className="row-meta" style={isOpen ? undefined : CLAMP}>{t.summary}</div>
+                  )}
                 </div>
-                <div className="row-meta">
-                  {[t.sender, t.project, t.due ? `Due ${t.due}` : null].filter(Boolean).join(' · ')}
+                <div className="row-actions">
+                  <button className="icon-btn" title="Not needed" onClick={() => dismissTask(t.id)}>×</button>
                 </div>
-                {t.summary && <div className="row-meta">{t.summary}</div>}
               </div>
-              <div className="row-actions">
-                <button className="icon-btn" title="Not needed" onClick={() => dismissTask(t.id)}>×</button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
